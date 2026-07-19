@@ -168,28 +168,28 @@ export default function App() {
     loadData();
   }, []);
 
-  // Sync to localStorage & Server API
+  // Sync to localStorage & Server API (Admin only)
   useEffect(() => {
     localStorage.setItem('chession_menu_items', JSON.stringify(menuItems));
-    if (dataInitialized) {
+    if (dataInitialized && isAdminLoggedIn) {
       fetch('/api/menu', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(menuItems)
       }).catch(err => console.error('Failed to save menu to server:', err));
     }
-  }, [menuItems, dataInitialized]);
+  }, [menuItems, dataInitialized, isAdminLoggedIn]);
 
   useEffect(() => {
     localStorage.setItem('chession_categories', JSON.stringify(categories));
-    if (dataInitialized) {
+    if (dataInitialized && isAdminLoggedIn) {
       fetch('/api/categories', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(categories)
       }).catch(err => console.error('Failed to save categories to server:', err));
     }
-  }, [categories, dataInitialized]);
+  }, [categories, dataInitialized, isAdminLoggedIn]);
 
   useEffect(() => {
     localStorage.setItem('chession_reviews', JSON.stringify(reviews));
@@ -197,14 +197,14 @@ export default function App() {
 
   useEffect(() => {
     localStorage.setItem('chession_config', JSON.stringify(config));
-    if (dataInitialized) {
+    if (dataInitialized && isAdminLoggedIn) {
       fetch('/api/config', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(config)
       }).catch(err => console.error('Failed to save config to server:', err));
     }
-  }, [config, dataInitialized]);
+  }, [config, dataInitialized, isAdminLoggedIn]);
 
   useEffect(() => {
     localStorage.setItem('chession_cart', JSON.stringify(cartItems));

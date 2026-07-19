@@ -17,73 +17,119 @@ const MENU_FILE_PATH = path.join(process.cwd(), 'src', 'menu_items.json');
 const CATEGORIES_FILE_PATH = path.join(process.cwd(), 'src', 'categories.json');
 const CONFIG_FILE_PATH = path.join(process.cwd(), 'src', 'restaurant_config.json');
 
-// --- API Routes ---
-app.get('/api/menu', (req, res) => {
+// Remote KVDB setup for permanent persistence
+const BUCKET_ID = 'kv_chession_0295768f_e443_440a_90fd_6b875f8426ae';
+const KVDB_BASE_URL = `https://kvdb.io/${BUCKET_ID}`;
+
+// Helper to load remote data with local file fallback
+async function loadData(key: string, localFilePath: string) {
   try {
-    if (fs.existsSync(MENU_FILE_PATH)) {
-      const data = fs.readFileSync(MENU_FILE_PATH, 'utf-8');
-      return res.json(JSON.parse(data));
+    const res = await fetch(`${KVDB_BASE_URL}/${key}`);
+    if (res.ok) {
+      const text = await res.text();
+      if (text && (text.trim().startsWith('[') || text.trim().startsWith('{'))) {
+        const parsed = JSON.parse(text);
+        // Save locally to keep in sync
+        try {
+          fs.writeFileSync(localFilePath, JSON.stringify(parsed, null, 2), 'utf-8');
+        } catch (err) {
+          console.error(`Failed to write local backup for ${key}:`, err);
+        }
+        return parsed;
+      }
     }
-    return res.status(404).json({ error: 'Menu file not found' });
   } catch (error) {
-    return res.status(500).json({ error: 'Failed to read menu file' });
+    console.error(`Failed to fetch ${key} from remote KVDB:`, error);
   }
+
+  // Fallback to local file if remote is unavailable or empty
+  try {
+    if (fs.existsSync(localFilePath)) {
+      const data = fs.readFileSync(localFilePath, 'utf-8');
+      return JSON.parse(data);
+    }
+  } catch (error) {
+    console.error(`Failed to read local fallback for ${key}:`, error);
+  }
+  return null;
+}
+
+// Helper to save remote data and local file
+async function saveData(key: string, data: any, localFilePath: string) {
+  // 1. Write locally first
+  try {
+    fs.writeFileSync(localFilePath, JSON.stringify(data, null, 2), 'utf-8');
+  } catch (error) {
+    console.error(`Failed to write local file for ${key}:`, error);
+  }
+
+  // 2. Write to remote KVDB for permanent multi-device sync
+  try {
+    await fetch(`${KVDB_BASE_URL}/${key}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+      headers: { 'Content-Type': 'application/json' }
+    });
+  } catch (error) {
+    console.error(`Failed to push ${key} to remote KVDB:`, error);
+  }
+}
+
+// --- API Routes ---
+app.get('/api/menu', async (req, res) => {
+  const data = await loadData('menu', MENU_FILE_PATH);
+  if (data) {
+    return res.json(data);
+  }
+  return res.status(404).json({ error: 'Menu data not found' });
 });
 
-app.post('/api/menu', (req, res) => {
+app.post('/api/menu', async (req, res) => {
   try {
     const menuItems = req.body;
     if (!Array.isArray(menuItems)) {
       return res.status(400).json({ error: 'Invalid menu items' });
     }
-    fs.writeFileSync(MENU_FILE_PATH, JSON.stringify(menuItems, null, 2), 'utf-8');
+    await saveData('menu', menuItems, MENU_FILE_PATH);
     return res.json({ success: true });
   } catch (error) {
     return res.status(500).json({ error: 'Failed to save menu items' });
   }
 });
 
-app.get('/api/categories', (req, res) => {
-  try {
-    if (fs.existsSync(CATEGORIES_FILE_PATH)) {
-      const data = fs.readFileSync(CATEGORIES_FILE_PATH, 'utf-8');
-      return res.json(JSON.parse(data));
-    }
-    return res.status(404).json({ error: 'Categories file not found' });
-  } catch (error) {
-    return res.status(500).json({ error: 'Failed to read categories file' });
+app.get('/api/categories', async (req, res) => {
+  const data = await loadData('categories', CATEGORIES_FILE_PATH);
+  if (data) {
+    return res.json(data);
   }
+  return res.status(404).json({ error: 'Categories data not found' });
 });
 
-app.post('/api/categories', (req, res) => {
+app.post('/api/categories', async (req, res) => {
   try {
     const categories = req.body;
     if (!Array.isArray(categories)) {
       return res.status(400).json({ error: 'Invalid categories' });
     }
-    fs.writeFileSync(CATEGORIES_FILE_PATH, JSON.stringify(categories, null, 2), 'utf-8');
+    await saveData('categories', categories, CATEGORIES_FILE_PATH);
     return res.json({ success: true });
   } catch (error) {
     return res.status(500).json({ error: 'Failed to save categories' });
   }
 });
 
-app.get('/api/config', (req, res) => {
-  try {
-    if (fs.existsSync(CONFIG_FILE_PATH)) {
-      const data = fs.readFileSync(CONFIG_FILE_PATH, 'utf-8');
-      return res.json(JSON.parse(data));
-    }
-    return res.status(404).json({ error: 'Config file not found' });
-  } catch (error) {
-    return res.status(500).json({ error: 'Failed to read config file' });
+app.get('/api/config', async (req, res) => {
+  const data = await loadData('config', CONFIG_FILE_PATH);
+  if (data) {
+    return res.json(data);
   }
+  return res.status(404).json({ error: 'Config data not found' });
 });
 
-app.post('/api/config', (req, res) => {
+app.post('/api/config', async (req, res) => {
   try {
     const config = req.body;
-    fs.writeFileSync(CONFIG_FILE_PATH, JSON.stringify(config, null, 2), 'utf-8');
+    await saveData('config', config, CONFIG_FILE_PATH);
     return res.json({ success: true });
   } catch (error) {
     return res.status(500).json({ error: 'Failed to save config' });
