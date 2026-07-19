@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import {
   Search,
   Heart,
@@ -53,6 +53,10 @@ const CATEGORY_MAPPING: Record<string, string> = {
 };
 
 export default function App() {
+  const isRemoteUpdateRef = useRef(false);
+  const isRemoteCategoriesRef = useRef(false);
+  const isRemoteConfigRef = useRef(false);
+
   // --- Persistent States from LocalStorage ---
   const [menuItems, setMenuItems] = useState<MenuItem[]>(() => {
     const saved = localStorage.getItem('chession_menu_items');
@@ -136,9 +140,12 @@ export default function App() {
 
   const [dataInitialized, setDataInitialized] = useState(false);
 
-  // Sync from server on mount
+  // Sync from server on mount & establish EventSource for real-time updates
   useEffect(() => {
-    const loadData = async () => {
+    let eventSource: EventSource | null = null;
+    let isConnected = false;
+
+    const fetchLatestData = async () => {
       try {
         const [menuRes, catRes, configRes] = await Promise.all([
           fetch('/api/menu').then(r => r.ok ? r.json() : null),
@@ -147,14 +154,17 @@ export default function App() {
         ]);
 
         if (menuRes && Array.isArray(menuRes)) {
+          isRemoteUpdateRef.current = true;
           setMenuItems(menuRes);
           localStorage.setItem('chession_menu_items', JSON.stringify(menuRes));
         }
         if (catRes && Array.isArray(catRes)) {
+          isRemoteCategoriesRef.current = true;
           setCategories(catRes);
           localStorage.setItem('chession_categories', JSON.stringify(catRes));
         }
         if (configRes && typeof configRes === 'object' && configRes !== null) {
+          isRemoteConfigRef.current = true;
           setConfig(configRes);
           localStorage.setItem('chession_config', JSON.stringify(configRes));
         }
@@ -165,13 +175,69 @@ export default function App() {
       }
     };
 
-    loadData();
+    const connectSSE = () => {
+      if (eventSource) {
+        eventSource.close();
+      }
+
+      eventSource = new EventSource('/api/updates');
+
+      eventSource.onopen = () => {
+        // If we were already connected once, re-sync in case we missed updates during offline time
+        if (isConnected) {
+          fetchLatestData();
+        }
+        isConnected = true;
+      };
+
+      eventSource.onmessage = (event) => {
+        try {
+          const parsed = JSON.parse(event.data);
+          if (!parsed || !parsed.type) return;
+
+          if (parsed.type === 'menu' && Array.isArray(parsed.data)) {
+            isRemoteUpdateRef.current = true;
+            setMenuItems(parsed.data);
+            localStorage.setItem('chession_menu_items', JSON.stringify(parsed.data));
+          } else if (parsed.type === 'categories' && Array.isArray(parsed.data)) {
+            isRemoteCategoriesRef.current = true;
+            setCategories(parsed.data);
+            localStorage.setItem('chession_categories', JSON.stringify(parsed.data));
+          } else if (parsed.type === 'config' && parsed.data && typeof parsed.data === 'object') {
+            isRemoteConfigRef.current = true;
+            setConfig(parsed.data);
+            localStorage.setItem('chession_config', JSON.stringify(parsed.data));
+          }
+        } catch (err) {
+          console.error('Failed to parse real-time update event:', err);
+        }
+      };
+
+      eventSource.onerror = () => {
+        isConnected = false;
+      };
+    };
+
+    // Load initial data and connect
+    fetchLatestData().then(() => {
+      connectSSE();
+    });
+
+    return () => {
+      if (eventSource) {
+        eventSource.close();
+      }
+    };
   }, []);
 
-  // Sync to localStorage & Server API (Admin only)
+  // Sync to localStorage & Server API (Admin only) - Guarded against infinite remote sync loop
   useEffect(() => {
     localStorage.setItem('chession_menu_items', JSON.stringify(menuItems));
     if (dataInitialized && isAdminLoggedIn) {
+      if (isRemoteUpdateRef.current) {
+        isRemoteUpdateRef.current = false;
+        return;
+      }
       fetch('/api/menu', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -183,6 +249,10 @@ export default function App() {
   useEffect(() => {
     localStorage.setItem('chession_categories', JSON.stringify(categories));
     if (dataInitialized && isAdminLoggedIn) {
+      if (isRemoteCategoriesRef.current) {
+        isRemoteCategoriesRef.current = false;
+        return;
+      }
       fetch('/api/categories', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -198,6 +268,10 @@ export default function App() {
   useEffect(() => {
     localStorage.setItem('chession_config', JSON.stringify(config));
     if (dataInitialized && isAdminLoggedIn) {
+      if (isRemoteConfigRef.current) {
+        isRemoteConfigRef.current = false;
+        return;
+      }
       fetch('/api/config', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
