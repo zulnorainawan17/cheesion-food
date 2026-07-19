@@ -18,7 +18,9 @@ import {
   Settings,
   AlertCircle,
   Eye,
-  DollarSign
+  DollarSign,
+  ArrowUp,
+  ArrowDown
 } from 'lucide-react';
 import { MenuItem, Order, RestaurantConfig } from '../types';
 import { INITIAL_MENU_ITEMS } from '../initialData';
@@ -748,24 +750,64 @@ export default function AdminPanel({
                   )}
 
                   {/* Categories Grid */}
-                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-3" id="categories-grid-list">
-                    {categories.map((cat) => (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3" id="categories-grid-list">
+                    {categories.map((cat, index) => (
                       <div
                         key={cat}
-                        className="p-4 bg-purple-50/30 rounded-2xl border border-purple-100/40 flex justify-between items-center"
+                        className="p-4 bg-purple-50/30 rounded-2xl border border-purple-100/40 flex justify-between items-center animate-fade-in"
                       >
-                        <span className="text-sm font-sans font-semibold text-[#2D1B4D]">{cat}</span>
-                        {cat !== 'All' ? (
-                          <button
-                            onClick={() => handleDeleteCategory(cat)}
-                            className="p-1.5 text-purple-400 hover:text-rose-500 hover:bg-rose-50 rounded-full transition-colors cursor-pointer"
-                            title="Delete category"
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </button>
-                        ) : (
-                          <span className="text-[10px] text-purple-400 uppercase tracking-widest font-bold">System</span>
-                        )}
+                        <span className="text-sm font-sans font-semibold text-[#2D1B4D] truncate mr-2" title={cat}>
+                          {cat}
+                        </span>
+                        <div className="flex items-center space-x-1 shrink-0">
+                          {/* Move Up Button */}
+                          {cat !== 'All' && index > 1 && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const newCats = [...categories];
+                                const temp = newCats[index];
+                                newCats[index] = newCats[index - 1];
+                                newCats[index - 1] = temp;
+                                onUpdateCategories(newCats);
+                              }}
+                              className="p-1.5 text-purple-500 hover:text-[#5c1d9b] hover:bg-purple-100 rounded-full transition-colors cursor-pointer"
+                              title="Move Category Up / اوپر لے جائیں"
+                            >
+                              <ArrowUp className="h-3.5 w-3.5" />
+                            </button>
+                          )}
+
+                          {/* Move Down Button */}
+                          {cat !== 'All' && index > 0 && index < categories.length - 1 && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const newCats = [...categories];
+                                const temp = newCats[index];
+                                newCats[index] = newCats[index + 1];
+                                newCats[index + 1] = temp;
+                                onUpdateCategories(newCats);
+                              }}
+                              className="p-1.5 text-purple-500 hover:text-[#5c1d9b] hover:bg-purple-100 rounded-full transition-colors cursor-pointer"
+                              title="Move Category Down / نیچے لے جائیں"
+                            >
+                              <ArrowDown className="h-3.5 w-3.5" />
+                            </button>
+                          )}
+
+                          {cat !== 'All' ? (
+                            <button
+                              onClick={() => handleDeleteCategory(cat)}
+                              className="p-1.5 text-purple-400 hover:text-rose-500 hover:bg-rose-50 rounded-full transition-colors cursor-pointer"
+                              title="Delete category"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </button>
+                          ) : (
+                            <span className="text-[10px] text-purple-400 uppercase tracking-widest font-bold">System</span>
+                          )}
+                        </div>
                       </div>
                     ))}
                   </div>
