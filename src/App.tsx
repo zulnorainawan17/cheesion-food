@@ -134,14 +134,62 @@ export default function App() {
 
 
 
-  // Sync to localStorage
+  const [dataInitialized, setDataInitialized] = useState(false);
+
+  // Sync from server on mount
+  useEffect(() => {
+    const loadData = async () => {
+      try {
+        const [menuRes, catRes, configRes] = await Promise.all([
+          fetch('/api/menu').then(r => r.ok ? r.json() : null),
+          fetch('/api/categories').then(r => r.ok ? r.json() : null),
+          fetch('/api/config').then(r => r.ok ? r.json() : null)
+        ]);
+
+        if (menuRes && Array.isArray(menuRes)) {
+          setMenuItems(menuRes);
+          localStorage.setItem('chession_menu_items', JSON.stringify(menuRes));
+        }
+        if (catRes && Array.isArray(catRes)) {
+          setCategories(catRes);
+          localStorage.setItem('chession_categories', JSON.stringify(catRes));
+        }
+        if (configRes && typeof configRes === 'object' && configRes !== null) {
+          setConfig(configRes);
+          localStorage.setItem('chession_config', JSON.stringify(configRes));
+        }
+      } catch (err) {
+        console.error('Failed to load server data:', err);
+      } finally {
+        setDataInitialized(true);
+      }
+    };
+
+    loadData();
+  }, []);
+
+  // Sync to localStorage & Server API
   useEffect(() => {
     localStorage.setItem('chession_menu_items', JSON.stringify(menuItems));
-  }, [menuItems]);
+    if (dataInitialized) {
+      fetch('/api/menu', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(menuItems)
+      }).catch(err => console.error('Failed to save menu to server:', err));
+    }
+  }, [menuItems, dataInitialized]);
 
   useEffect(() => {
     localStorage.setItem('chession_categories', JSON.stringify(categories));
-  }, [categories]);
+    if (dataInitialized) {
+      fetch('/api/categories', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(categories)
+      }).catch(err => console.error('Failed to save categories to server:', err));
+    }
+  }, [categories, dataInitialized]);
 
   useEffect(() => {
     localStorage.setItem('chession_reviews', JSON.stringify(reviews));
@@ -149,7 +197,14 @@ export default function App() {
 
   useEffect(() => {
     localStorage.setItem('chession_config', JSON.stringify(config));
-  }, [config]);
+    if (dataInitialized) {
+      fetch('/api/config', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(config)
+      }).catch(err => console.error('Failed to save config to server:', err));
+    }
+  }, [config, dataInitialized]);
 
   useEffect(() => {
     localStorage.setItem('chession_cart', JSON.stringify(cartItems));
